@@ -1,0 +1,30 @@
+incremental updates to .riblet files
+
+ability to append onto an input file, for grow-only use-cases
+
+parallelise `riblet build`
+
+--only-add and --only-del flags to diff
+
+header fields
+  input size
+  input hash
+
+big-endian support
+
+`riblet recover`
+  tries to peel a single riblet file. hmmmm... how to know the minimum symbols needed to make it recoverable?
+
+`riblet check` command?
+
+built-in compression?
+
+gracefully handle dups somehow during diff instead of infinite looping, etc
+
+"doneAdding" param in RIBLT: clears the codedSymbols vector as they are generated
+  puts an upper-bound on memory required for '-' output
+
+-z for NUL separator instead of newline
+
+verbose mode
+  lists how many symbols/bytes consumed
