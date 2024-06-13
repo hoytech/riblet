@@ -17,7 +17,6 @@ void cmd_encode(const std::vector<std::string> &subArgs) {
     std::string line;
 
     while (std::cin) {
-        currLine++;
         std::getline(std::cin, line);
     }
 }
