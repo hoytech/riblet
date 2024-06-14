@@ -1,2 +1,4 @@
 appName: riblet
 verbosity: -1
+features:
+    ssl: true
