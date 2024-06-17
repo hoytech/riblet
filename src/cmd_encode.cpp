@@ -154,7 +154,7 @@ struct SymbolQueue {
     }
 
     void bubbleUp() {
-        if (symbolVec.size() == 0) return;
+        if (symbolVec.size() == 0) throw herr("can't bubbleUp empty queue");
         auto e = codedQueue.top();
         codedQueue.pop();
         e.codedStreamIndex = symbolVec[e.symbolIndex].gen.curr;
