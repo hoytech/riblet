@@ -1,5 +1,5 @@
 BIN  ?= riblet
 APPS ?= encode
-OPT  ?= -O3 -g
+OPT  ?= -O0 -g
 
 include golpe/rules.mk

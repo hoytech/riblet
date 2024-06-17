@@ -91,12 +91,20 @@ struct CodedSymbol {
     }
 
     void add(const CodedSymbol &other) {
+        update(other, other.count);
+    }
+
+    void sub(const CodedSymbol &other) {
+        update(other, -other.count);
+    }
+
+    void update(const CodedSymbol &other, int64_t inc) {
         if (other.val.size() > val.size()) val.resize(other.val.size(), '\0');
         for (size_t i = 0; i < other.val.size(); i++) val[i] ^= other.val[i];
 
         for (size_t i = 0; i < 32; i++) hash[i] ^= other.hash[i];
 
-        count += other.count;
+        count += inc;
     }
 
     void negate() {
@@ -118,6 +126,11 @@ struct CodedSymbol {
         }
 
         return false;
+    }
+
+    bool isEmpty() {
+        uint8_t empty[32] = {0};
+        return count == 0 && memcmp(hash, empty, 32) == 0;
     }
 
     std::string getVal() const {
@@ -224,10 +237,12 @@ struct RIBLT {
         if (!fixedSize) queue.enqueue(sym, gen);
     }
 
-    void peel(std::function<void(const CodedSymbol &sym)> onSym) {
+    bool peel(std::function<void(const CodedSymbol &sym)> onSym) {
         for (; nextPeel < codedSymbols.size(); nextPeel++) {
             peelIndex(nextPeel, onSym);
         }
+
+        return isEmpty();
     }
 
     void peelIndex(size_t startIndex, std::function<void(const CodedSymbol &sym)> onSym) {
@@ -249,6 +264,11 @@ struct RIBLT {
         }
     }
 
+    // FIXME: name
+    bool isEmpty() {
+        return codedSymbols.size() > 0 && codedSymbols[0].isEmpty();
+    }
+
   private:
     void applySym(const CodedSymbol &sym, IndexGenerator &gen, std::function<void(size_t)> cb = [](size_t){}) {
         while (gen.curr < codedSymbols.size()) {
@@ -259,20 +279,46 @@ struct RIBLT {
     }
 };
 
-struct Decoder {
-    // append a-b onto vector of codedSymbols
-    // apply updates from priority queue for any pending peelings of this new index
-    // if pure, peel it and add to priority queue for future peelings
-    // repeat until first symbol is 0
-};
-
-
 
 
 
 void cmd_encode(const std::vector<std::string> &subArgs) {
     std::map<std::string, docopt::value> args = docopt::docopt(USAGE, subArgs, true, "");
 
+    RIBLT e1;
+    RIBLT e2;
+
+    e1.add(CodedSymbol("a"));
+    e1.add(CodedSymbol("c"));
+    e1.add(CodedSymbol("d"));
+    e1.add(CodedSymbol("zz"));
+
+    e2.add(CodedSymbol("a"));
+    e2.add(CodedSymbol("b"));
+    e2.add(CodedSymbol("c"));
+    e2.add(CodedSymbol("d"));
+
+    e1.expand(100);
+    e2.expand(100);
+
+    RIBLT e;
+
+    for (size_t i = 0; i < 15; i++) {
+        auto sym = e1.codedSymbols[i];
+        sym.sub(e2.codedSymbols[i]);
+        e.push(sym);
+
+        bool done = e.peel([](const auto &s){
+            LW << "PEELED: " << s.getVal() << " / " << s.count;
+        });
+
+        if (done) break;
+    }
+
+    if (!e.isEmpty()) LE << "Couldn't peel";
+
+
+    /*
     RIBLT e;
 
     e.add(CodedSymbol("a"));
@@ -284,6 +330,7 @@ void cmd_encode(const std::vector<std::string> &subArgs) {
     e.peel([](const auto &s){
         LW << "PEELED: " << s.getVal() << " / " << s.count;
     });
+    */
 
     /*
     std::string line;
@@ -301,6 +348,6 @@ void cmd_encode(const std::vector<std::string> &subArgs) {
         const auto &s = e.codedSymbols[i];
         LW << "CS " << i;
         LW << "  count = " << s.count;
-        LW << "  val = '" << s.getVal() << "'";
+        LW << "  val = '" << to_hex(s.val) << "'";
     }
 }
