@@ -1,6 +1,9 @@
+#include <string.h>
+
 #include <cmath>
 #include <iostream>
 #include <queue>
+#include <functional>
 
 #include <openssl/sha.h>
 
@@ -16,8 +19,12 @@ R"(
 
 
 
+inline std::string dumpHash(uint8_t *hash) {
+    return to_hex(std::string(reinterpret_cast<char*>(hash), 32));
+}
 
 
+/*
 inline uint64_t decodeVarInt(std::string_view &encoded) {
     uint64_t res = 0;
 
@@ -50,8 +57,21 @@ inline std::string encodeVarInt(uint64_t n) {
 
     return o;
 }
+*/
 
 
+template<typename T>
+inline std::string_view to_sv(const T &v) {
+    return std::string_view(reinterpret_cast<const char*>(std::addressof(v)), sizeof(v));
+}
+
+template<typename T>
+inline T from_sv(std::string_view v) {
+    if (v.size() != sizeof(T)) throw herr("from_sv");
+    T ret;
+    std::memcpy(&ret, const_cast<char*>(v.data()), sizeof(T));
+    return ret;
+}
 
 struct CodedSymbol {
     std::string val;
@@ -62,10 +82,10 @@ struct CodedSymbol {
     }
 
     CodedSymbol(std::string_view valRaw, int64_t count_ = 1) {
-        val = encodeVarInt(valRaw.size()); // FIXME: maybe varint is bad idea: possible pre-image overlap?
+        val += to_sv<uint32_t>((uint32_t) valRaw.size()); // FIXME: bounds check this size, endianness
         val += valRaw;
 
-        SHA256(reinterpret_cast<const unsigned char*>(val.data()), val.size(), hash);
+        SHA256(reinterpret_cast<const unsigned char*>(valRaw.data()), valRaw.size(), hash);
 
         count = count_;
     }
@@ -81,6 +101,33 @@ struct CodedSymbol {
 
     void negate() {
         count *= -1;
+    }
+
+    bool isPure() {
+        if (count == 1 || count == -1) {
+            auto v = std::string_view(val);
+
+            if (v.size() < 4) throw herr("val unexpectedly small");
+            auto size = from_sv<uint32_t>(v.substr(0, 4));
+            v = v.substr(4);
+            if (size > v.size()) return false;
+
+            uint8_t tempHash[32];
+            SHA256(reinterpret_cast<const unsigned char*>(v.data()), size, tempHash);
+            return memcmp(hash, tempHash, 32) == 0;
+        }
+
+        return false;
+    }
+
+    std::string getVal() const {
+        auto v = std::string_view(val);
+
+        if (v.size() < 4) throw herr("val unexpectedly small");
+        auto size = from_sv<uint32_t>(v.substr(0, 4));
+        v = v.substr(4);
+        if (size > v.size()) throw herr("val not decodeable (not pure?)");
+        return std::string(v.substr(0, size));
     }
 };
 
@@ -143,27 +190,28 @@ inline bool operator>(SymbolQueue::QueueEntry const &a, SymbolQueue::QueueEntry 
     return a.codedStreamIndex > b.codedStreamIndex;
 }
 
-struct CodedSymbolVector {
+
+struct RIBLT {
     std::vector<CodedSymbol> codedSymbols;
     SymbolQueue queue;
     bool fixedSize = false;
+    size_t nextPeel = 0;
 
+  public:
     void expand(size_t n) {
         if (fixedSize) throw herr("can't expand fixed size vector");
         codedSymbols.resize(codedSymbols.size() + n);
 
         while (queue.nextCodedIndex() < codedSymbols.size()) {
-        LW << "ZZ: " << queue.nextCodedIndex();
             auto &top = queue.top();
-
-        LW << "MM: " << top.gen.curr;
-            while (top.gen.curr < codedSymbols.size()) {
-                codedSymbols[top.gen.curr].add(top.sym);
-                top.gen.jump();
-            }
-
+            applySym(top.sym, top.gen);
             queue.sort();
         }
+    }
+
+    void push(const CodedSymbol &sym) {
+        expand(1);
+        codedSymbols.back().add(sym);
     }
 
     void setFixedSize() {
@@ -172,13 +220,42 @@ struct CodedSymbolVector {
 
     void add(const CodedSymbol &sym) {
         IndexGenerator gen(sym);
+        applySym(sym, gen);
+        if (!fixedSize) queue.enqueue(sym, gen);
+    }
 
+    void peel(std::function<void(const CodedSymbol &sym)> onSym) {
+        for (; nextPeel < codedSymbols.size(); nextPeel++) {
+            peelIndex(nextPeel, onSym);
+        }
+    }
+
+    void peelIndex(size_t startIndex, std::function<void(const CodedSymbol &sym)> onSym) {
+        std::vector<size_t> decodeable = {startIndex};
+
+        while (decodeable.size()) {
+            size_t index = decodeable.back();
+            decodeable.pop_back();
+            if (!codedSymbols[index].isPure()) continue;
+
+            onSym(codedSymbols[index]);
+
+            auto sym = codedSymbols[index];
+            IndexGenerator gen(sym);
+            sym.negate();
+            applySym(sym, gen, [&](size_t newIndex){
+                if (codedSymbols[newIndex].isPure()) decodeable.push_back(newIndex);
+            });
+        }
+    }
+
+  private:
+    void applySym(const CodedSymbol &sym, IndexGenerator &gen, std::function<void(size_t)> cb = [](size_t){}) {
         while (gen.curr < codedSymbols.size()) {
             codedSymbols[gen.curr].add(sym);
+            cb(gen.curr);
             gen.jump();
         }
-
-        if (!fixedSize) queue.enqueue(sym, gen);
     }
 };
 
@@ -191,14 +268,24 @@ struct Decoder {
 
 
 
-//LW << to_hex(std::string(reinterpret_cast<char*>(hash), 32));
 
 
 void cmd_encode(const std::vector<std::string> &subArgs) {
     std::map<std::string, docopt::value> args = docopt::docopt(USAGE, subArgs, true, "");
 
-    CodedSymbolVector e;
+    RIBLT e;
 
+    e.add(CodedSymbol("a"));
+    e.add(CodedSymbol("b"));
+    e.add(CodedSymbol("c"));
+    e.add(CodedSymbol("d"));
+
+    e.expand(7);
+    e.peel([](const auto &s){
+        LW << "PEELED: " << s.getVal() << " / " << s.count;
+    });
+
+    /*
     std::string line;
 
     while (std::cin) {
@@ -208,11 +295,12 @@ void cmd_encode(const std::vector<std::string> &subArgs) {
     }
 
     e.expand(20);
+    */
 
     for (size_t i = 0; i < e.codedSymbols.size(); i++) {
         const auto &s = e.codedSymbols[i];
         LW << "CS " << i;
         LW << "  count = " << s.count;
-        LW << "  val = '" << s.val << "'";
+        LW << "  val = '" << s.getVal() << "'";
     }
 }
