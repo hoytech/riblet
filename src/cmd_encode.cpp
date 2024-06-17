@@ -23,43 +23,6 @@ inline std::string dumpHash(uint8_t *hash) {
     return to_hex(std::string(reinterpret_cast<char*>(hash), 32));
 }
 
-
-/*
-inline uint64_t decodeVarInt(std::string_view &encoded) {
-    uint64_t res = 0;
-
-    while (1) {
-        if (encoded.size() == 0) throw herr("premature end of varint");
-        uint64_t byte = encoded[0];
-        encoded = encoded.substr(1);
-        res = (res << 7) | (byte & 0b0111'1111);
-        if ((byte & 0b1000'0000) == 0) break;
-    }
-
-    return res;
-}
-
-inline std::string encodeVarInt(uint64_t n) {
-    if (n == 0) return std::string(1, '\0');
-
-    std::string o;
-
-    while (n) {
-        o.push_back(static_cast<unsigned char>(n & 0x7F));
-        n >>= 7;
-    }
-
-    std::reverse(o.begin(), o.end());
-
-    for (size_t i = 0; i < o.size() - 1; i++) {
-        o[i] |= 0x80;
-    }
-
-    return o;
-}
-*/
-
-
 template<typename T>
 inline std::string_view to_sv(const T &v) {
     return std::string_view(reinterpret_cast<const char*>(std::addressof(v)), sizeof(v));
@@ -128,7 +91,7 @@ struct CodedSymbol {
         return false;
     }
 
-    bool isEmpty() {
+    bool isZero() {
         uint8_t empty[32] = {0};
         return count == 0 && memcmp(hash, empty, 32) == 0;
     }
@@ -150,7 +113,7 @@ struct IndexGenerator {
     uint64_t prng;
 
     IndexGenerator(const CodedSymbol &sym) {
-        prng = *((uint64_t*)sym.hash); // FIXME: byteswap if big-endian
+        prng = *((uint64_t*)sym.hash); // FIXME: byteswap if big-endian, use from_sv
     }
 
     void jump() {
@@ -190,7 +153,7 @@ struct SymbolQueue {
         return symbolVec[codedQueue.top().symbolIndex];
     }
 
-    void sort() {
+    void bubbleUp() {
         if (symbolVec.size() == 0) return;
         auto e = codedQueue.top();
         codedQueue.pop();
@@ -218,7 +181,7 @@ struct RIBLT {
         while (queue.nextCodedIndex() < codedSymbols.size()) {
             auto &top = queue.top();
             applySym(top.sym, top.gen);
-            queue.sort();
+            queue.bubbleUp();
         }
     }
 
@@ -237,12 +200,10 @@ struct RIBLT {
         if (!fixedSize) queue.enqueue(sym, gen);
     }
 
-    bool peel(std::function<void(const CodedSymbol &sym)> onSym) {
+    void peel(std::function<void(const CodedSymbol &sym)> onSym) {
         for (; nextPeel < codedSymbols.size(); nextPeel++) {
             peelIndex(nextPeel, onSym);
         }
-
-        return isEmpty();
     }
 
     void peelIndex(size_t startIndex, std::function<void(const CodedSymbol &sym)> onSym) {
@@ -264,9 +225,8 @@ struct RIBLT {
         }
     }
 
-    // FIXME: name
-    bool isEmpty() {
-        return codedSymbols.size() > 0 && codedSymbols[0].isEmpty();
+    bool isBalanced() {
+        return codedSymbols.size() > 0 && codedSymbols[0].isZero();
     }
 
   private:
@@ -308,14 +268,14 @@ void cmd_encode(const std::vector<std::string> &subArgs) {
         sym.sub(e2.codedSymbols[i]);
         e.push(sym);
 
-        bool done = e.peel([](const auto &s){
+        e.peel([](const auto &s){
             LW << "PEELED: " << s.getVal() << " / " << s.count;
         });
 
-        if (done) break;
+        if (e.isBalanced()) break;
     }
 
-    if (!e.isEmpty()) LE << "Couldn't peel";
+    if (!e.isBalanced()) LE << "Couldn't peel";
 
 
     /*
