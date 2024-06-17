@@ -1,5 +1,6 @@
 #include <cmath>
 #include <iostream>
+#include <queue>
 
 #include <openssl/sha.h>
 
@@ -51,6 +52,7 @@ inline std::string encodeVarInt(uint64_t n) {
 }
 
 
+
 struct CodedSymbol {
     std::string val;
     uint8_t hash[32] = {0};
@@ -59,74 +61,132 @@ struct CodedSymbol {
     CodedSymbol() {
     }
 
-    CodedSymbol(std::string_view valRaw) {
-        val = encodeVarInt(valRaw.size());
+    CodedSymbol(std::string_view valRaw, int64_t count_ = 1) {
+        val = encodeVarInt(valRaw.size()); // FIXME: maybe varint is bad idea: possible pre-image overlap?
         val += valRaw;
 
         SHA256(reinterpret_cast<const unsigned char*>(val.data()), val.size(), hash);
 
-        count = 1;
+        count = count_;
     }
 
     void add(const CodedSymbol &other) {
-        update(other, 1);
-    }
-
-    void sub(const CodedSymbol &other) {
-        update(other, -1);
-    }
-
- private:
-    void update(const CodedSymbol &other, int64_t sign) {
         if (other.val.size() > val.size()) val.resize(other.val.size(), '\0');
         for (size_t i = 0; i < other.val.size(); i++) val[i] ^= other.val[i];
 
         for (size_t i = 0; i < 32; i++) hash[i] ^= other.hash[i];
 
-        count += sign * other.count;
+        count += other.count;
+    }
+
+    void negate() {
+        count *= -1;
     }
 };
 
 
 struct IndexGenerator {
+    uint64_t curr = 0;
     uint64_t prng;
-    uint64_t lastIndex = 0;
 
     IndexGenerator(const CodedSymbol &sym) {
-        prng = *((uint64_t*)sym.hash); // FIXME: make big-endian machines byteswap
+        prng = *((uint64_t*)sym.hash); // FIXME: byteswap if big-endian
     }
 
-    uint64_t nextIndex() {
+    void jump() {
         prng *= 0xda942042e4dd58b5; // FIXME: use better PRNG
 
-        lastIndex += uint64_t(ceil((double(lastIndex) + 1.5) * ((uint64_t(1)<<32)/std::sqrt(double(prng)+1) - 1)));
-        return lastIndex;
+        curr += uint64_t(ceil((double(curr) + 1.5) * ((uint64_t(1)<<32)/std::sqrt(double(prng)+1) - 1)));
     }
 };
 
 
+struct SymbolQueue {
+    struct QueueEntry {
+        uint64_t codedStreamIndex;
+        uint64_t symbolIndex;
+    };
 
-struct Encoder {
-    std::vector<CodedSymbol> codedSymbols;
+    struct SymbolEntry {
+        IndexGenerator gen;
+        CodedSymbol sym;
+    };
 
-    void allocate(uint64_t n) {
-        codedSymbols.resize(n);
+    std::vector<SymbolEntry> symbolVec;
+    std::priority_queue<QueueEntry, std::vector<QueueEntry>, std::greater<QueueEntry>> codedQueue;
+
+    void enqueue(const CodedSymbol &sym, const IndexGenerator &gen) {
+        codedQueue.emplace(gen.curr, symbolVec.size());
+        symbolVec.emplace_back(gen, sym);
     }
 
-    void add(std::string_view val) {
-        CodedSymbol sym(val);
+    uint64_t nextCodedIndex() {
+        if (symbolVec.size() == 0) return std::numeric_limits<uint64_t>::max();
+        return codedQueue.top().codedStreamIndex;
+    }
+
+    SymbolEntry &top() {
+        if (symbolVec.size() == 0) throw herr("SymbolQueue empty");
+        return symbolVec[codedQueue.top().symbolIndex];
+    }
+
+    void sort() {
+        if (symbolVec.size() == 0) return;
+        auto e = codedQueue.top();
+        codedQueue.pop();
+        e.codedStreamIndex = symbolVec[e.symbolIndex].gen.curr;
+        codedQueue.push(e);
+    }
+};
+
+inline bool operator>(SymbolQueue::QueueEntry const &a, SymbolQueue::QueueEntry const &b) {
+    return a.codedStreamIndex > b.codedStreamIndex;
+}
+
+struct CodedSymbolVector {
+    std::vector<CodedSymbol> codedSymbols;
+    SymbolQueue queue;
+    bool fixedSize = false;
+
+    void expand(size_t n) {
+        if (fixedSize) throw herr("can't expand fixed size vector");
+        codedSymbols.resize(codedSymbols.size() + n);
+
+        while (queue.nextCodedIndex() < codedSymbols.size()) {
+        LW << "ZZ: " << queue.nextCodedIndex();
+            auto &top = queue.top();
+
+        LW << "MM: " << top.gen.curr;
+            while (top.gen.curr < codedSymbols.size()) {
+                codedSymbols[top.gen.curr].add(top.sym);
+                top.gen.jump();
+            }
+
+            queue.sort();
+        }
+    }
+
+    void setFixedSize() {
+        fixedSize = true;
+    }
+
+    void add(const CodedSymbol &sym) {
         IndexGenerator gen(sym);
 
-        uint64_t index = 0;
-
-        while (index < codedSymbols.size()) {
-            codedSymbols[index].add(val);
-            index = gen.nextIndex();
+        while (gen.curr < codedSymbols.size()) {
+            codedSymbols[gen.curr].add(sym);
+            gen.jump();
         }
+
+        if (!fixedSize) queue.enqueue(sym, gen);
     }
 };
 
 struct Decoder {
+    // append a-b onto vector of codedSymbols
+    // apply updates from priority queue for any pending peelings of this new index
+    // if pure, peel it and add to priority queue for future peelings
+    // repeat until first symbol is 0
 };
 
 
@@ -137,16 +197,17 @@ struct Decoder {
 void cmd_encode(const std::vector<std::string> &subArgs) {
     std::map<std::string, docopt::value> args = docopt::docopt(USAGE, subArgs, true, "");
 
-    Encoder e;
-    e.allocate(20);
+    CodedSymbolVector e;
 
     std::string line;
 
     while (std::cin) {
         std::getline(std::cin, line);
         if (line.size() == 0) continue;
-        e.add(line);
+        e.add(CodedSymbol(line));
     }
+
+    e.expand(20);
 
     for (size_t i = 0; i < e.codedSymbols.size(); i++) {
         const auto &s = e.codedSymbols[i];
