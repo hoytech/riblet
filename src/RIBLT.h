@@ -1,3 +1,5 @@
+#pragma once
+
 #include <cmath>
 #include <cstring>
 #include <iostream>
@@ -8,21 +10,11 @@
 
 #include "golpe.h"
 
+#include "ParseUtils.h"
+
 
 namespace riblet {
 
-template<typename T>
-inline std::string_view to_sv(const T &v) {
-    return std::string_view(reinterpret_cast<const char*>(std::addressof(v)), sizeof(v));
-}
-
-template<typename T>
-inline T from_sv(std::string_view v) {
-    if (v.size() != sizeof(T)) throw herr("from_sv");
-    T ret;
-    std::memcpy(&ret, const_cast<char*>(v.data()), sizeof(T));
-    return ret;
-}
 
 struct CodedSymbol {
     std::string val;
@@ -37,6 +29,15 @@ struct CodedSymbol {
         val += valRaw;
 
         SHA256(reinterpret_cast<const unsigned char*>(valRaw.data()), valRaw.size(), hash);
+
+        count = count_;
+    }
+
+    CodedSymbol(std::string_view val_, std::string_view hash_, int64_t count_) {
+        if (hash_.size() != 32) throw herr("invalid hash size");
+
+        val += val_;
+        std::memcpy(hash, hash_.data(), 32);
 
         count = count_;
     }
@@ -93,6 +94,10 @@ struct CodedSymbol {
         v = v.substr(4);
         if (size > v.size()) throw herr("val not decodeable (not pure?)");
         return std::string(v.substr(0, size));
+    }
+
+    std::string_view getHashSV() const {
+        return std::string_view(reinterpret_cast<const char*>(hash), 32);
     }
 };
 

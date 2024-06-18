@@ -6,6 +6,7 @@
 #include "golpe.h"
 
 #include "RIBLT.h"
+#include "FileFormat.h"
 
 
 static const char USAGE[] =
