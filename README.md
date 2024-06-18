@@ -1,5 +1,8 @@
-    riblet build file.csv
-      -> creates file.csv.riblet
+    riblet build -n 1000 file.csv
+      -> creates file.csv.riblet with 1k coded symbols
+
+    riblet build --stdout file.csv
+      -> infinite stream to stdout
 
     riblet diff file.csv <(curl https://example.com/file.csv.riblet)
 
