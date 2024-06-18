@@ -87,6 +87,7 @@ struct CodedSymbol {
     std::string getVal() const {
         auto v = std::string_view(val);
 
+        // FIXME: code duplication
         if (v.size() < 4) throw herr("val unexpectedly small");
         auto size = from_sv<uint32_t>(v.substr(0, 4));
         v = v.substr(4);
