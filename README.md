@@ -24,6 +24,8 @@ TODO
 
 docs
 
+tests
+
 optional dup checking during build
 
 compression
@@ -45,3 +47,7 @@ header fields
 better prng
 
 add hashes instead of xor?
+
+doneAdding in RIBLT: clears the codedSymbols vector. maybe useful for '-' output?
+
+-z for NUL separator instead of newline

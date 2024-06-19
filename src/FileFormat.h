@@ -25,6 +25,9 @@ TLV := <tag (Varint)> || <length (Varint)> || <value (bytes)>
 CodedSymbol := <symbolLen (uint32LE)> || <countDelta (VarintZ)> || <hash (Byte[32])> || <value (bytes)>
 
 Varint := <Digit+128>* <Digit>
+
+
+symbolLen == 0 means zero symbol
 */
 
 namespace riblet {
@@ -37,7 +40,6 @@ struct FileWriter {
     FILE *f = nullptr;
     int64_t prevCount = 0;
     uint64_t symbolsWritten = 0;
-    uint64_t bytesWritten = 0;
 
     FileWriter(const std::string &filename, bool overwrite = false) {
         if (filename == "-") {
@@ -58,10 +60,16 @@ struct FileWriter {
 
     void writeHeader() {
         fwrite("RIBLT0\0\0\0\0", 1, 10, f);
-        // FIXME: add header to bytesWritten
     }
 
     void writeSymbol(const CodedSymbol &sym) {
+        if (sym.isZero()) {
+            std::string output = encodeUint32LE(0);
+            fwrite(output.data(), 1, output.size(), f);
+            symbolsWritten++;
+            return;
+        }
+
         int64_t countDelta = sym.count - prevCount;
         prevCount = sym.count;
 
@@ -77,13 +85,13 @@ struct FileWriter {
         fwrite(encodedSym.data(), 1, encodedSym.size(), f);
 
         symbolsWritten++;
-        bytesWritten += sizeOutput.size() + encodedSym.size();
     }
 };
 
 struct FileReader {
     FILE *f = nullptr;
     int64_t currCount = 0;
+    size_t maxReadSize = 1024 * 1024;
 
     FileReader(const std::string &filename) {
         if (filename == "-") {
@@ -102,7 +110,8 @@ struct FileReader {
     }
 
     void readHeader() {
-        (void)readBytes(10);
+        std::string s = readBytes(10);
+        if (!s.starts_with("RIBLT0")) throw herr("not a RIBLT file");
     }
 
     std::optional<CodedSymbol> readSymbol() {
@@ -110,6 +119,10 @@ struct FileReader {
         if (!symSizeOptional) return {};
 
         auto symSize = (size_t) *symSizeOptional;
+
+        if (symSize == 0) return CodedSymbol();
+        if (symSize > maxReadSize) throw herr("riblet record read too big: ", symSize);
+
         auto buffer = readBytes(symSize);
         auto v = std::string_view(buffer);
 

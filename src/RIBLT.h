@@ -80,7 +80,7 @@ struct CodedSymbol {
         return false;
     }
 
-    bool isZero() {
+    bool isZero() const {
         uint8_t empty[32] = {0};
         return count == 0 && memcmp(hash, empty, 32) == 0;
     }
@@ -154,6 +154,14 @@ struct SymbolQueue {
         e.codedStreamIndex = symbolVec[e.symbolIndex].gen.curr;
         codedQueue.push(e);
     }
+
+    void clear() {
+        symbolVec.clear();
+        symbolVec.shrink_to_fit();
+
+        decltype(codedQueue) emptyQueue;
+        codedQueue.swap(emptyQueue);
+    }
 };
 
 inline bool operator>(SymbolQueue::QueueEntry const &a, SymbolQueue::QueueEntry const &b) {
@@ -164,12 +172,12 @@ inline bool operator>(SymbolQueue::QueueEntry const &a, SymbolQueue::QueueEntry 
 struct RIBLT {
     std::vector<CodedSymbol> codedSymbols;
     SymbolQueue queue;
-    bool fixedSize = false;
+    bool doneExpanding = false;
     size_t nextPeel = 0;
 
   public:
     void expand(size_t n) {
-        if (fixedSize) throw herr("can't expand fixed size vector");
+        if (doneExpanding) throw herr("can't expand fixed size vector");
         codedSymbols.resize(codedSymbols.size() + n);
 
         while (queue.nextCodedIndex() < codedSymbols.size()) {
@@ -184,14 +192,15 @@ struct RIBLT {
         codedSymbols.back().add(sym);
     }
 
-    void setFixedSize() {
-        fixedSize = true;
+    void setDoneExpanding() {
+        doneExpanding = true;
+        queue.clear();
     }
 
     void add(const CodedSymbol &sym) {
         IndexGenerator gen(sym);
         applySym(sym, gen);
-        if (!fixedSize) queue.enqueue(sym, gen);
+        if (!doneExpanding) queue.enqueue(sym, gen);
     }
 
     void peel(std::function<void(const CodedSymbol &sym)> onSym) {
@@ -204,6 +213,7 @@ struct RIBLT {
         std::vector<size_t> decodeable = {startIndex};
 
         while (decodeable.size()) {
+            LW << "DING: " << decodeable.size();
             size_t index = decodeable.back();
             decodeable.pop_back();
             if (!codedSymbols[index].isPure()) continue;
@@ -214,7 +224,10 @@ struct RIBLT {
             IndexGenerator gen(sym);
             sym.negate();
             applySym(sym, gen, [&](size_t newIndex){
-                if (codedSymbols[newIndex].isPure()) decodeable.push_back(newIndex);
+                if (codedSymbols[newIndex].isPure()) {
+                LW << "PURE " << newIndex;
+                decodeable.push_back(newIndex);
+                }
             });
         }
     }
