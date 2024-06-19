@@ -213,7 +213,6 @@ struct RIBLT {
         std::vector<size_t> decodeable = {startIndex};
 
         while (decodeable.size()) {
-            LW << "DING: " << decodeable.size();
             size_t index = decodeable.back();
             decodeable.pop_back();
             if (!codedSymbols[index].isPure()) continue;
@@ -223,11 +222,9 @@ struct RIBLT {
             auto sym = codedSymbols[index];
             IndexGenerator gen(sym);
             sym.negate();
+            LW << "DECODEABLE " << index;
             applySym(sym, gen, [&](size_t newIndex){
-                if (codedSymbols[newIndex].isPure()) {
-                LW << "PURE " << newIndex;
-                decodeable.push_back(newIndex);
-                }
+                if (codedSymbols[newIndex].isPure()) decodeable.push_back(newIndex);
             });
         }
     }
@@ -238,8 +235,10 @@ struct RIBLT {
 
   private:
     void applySym(const CodedSymbol &sym, IndexGenerator &gen, std::function<void(size_t)> cb = [](size_t){}) {
+        LW << "APPLYSIM";
         while (gen.curr < codedSymbols.size()) {
             codedSymbols[gen.curr].add(sym);
+            LW << "Killing " << gen.curr << " / " << sym.getVal() << " / " << sym.count;
             cb(gen.curr);
             gen.jump();
         }
