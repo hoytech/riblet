@@ -6,6 +6,7 @@
 #include <unistd.h>
 
 #include <string>
+#include <optional>
 
 #include "golpe.h"
 
@@ -32,7 +33,7 @@ namespace riblet {
 
 
 
-class FileWriter {
+struct FileWriter {
     FILE *f = nullptr;
     int64_t prevCount = 0;
     uint64_t symbolsWritten = 0;
@@ -82,7 +83,6 @@ class FileWriter {
 
 struct FileReader {
     FILE *f = nullptr;
-    std::string buffer;
     int64_t currCount = 0;
 
     FileReader(const std::string &filename) {
@@ -101,46 +101,46 @@ struct FileReader {
         }
     }
 
-    void readBytes(size_t n) {
-        size_t currSize = buffer.size();
-        if (currSize >= n) return;
-        size_t needed = n - currSize;
-
-        buffer.resize(n);
-
-        size_t actuallyRead = fread(buffer.data() + currSize, 1, needed, f);
-        if (actuallyRead != needed) throw herr("premature end of riblet stream");
-    }
-
     void readHeader() {
-        readBytes(10);
-        buffer.clear();
+        (void)readBytes(10);
     }
 
-    CodedSymbol readSymbol() {
-        uint32_t symSize = readUint32LE();
-        readBytes(symSize);
+    std::optional<CodedSymbol> readSymbol() {
+        auto symSizeOptional = readUint32LE();
+        if (!symSizeOptional) return {};
+
+        auto symSize = (size_t) *symSizeOptional;
+        auto buffer = readBytes(symSize);
         auto v = std::string_view(buffer);
 
         int64_t countDelta = decodeVarIntZ(v);
-        std::string_view hash = getBytes(v, 32);
+        auto hash = getBytes(v, 32);
 
         currCount += countDelta;
 
         CodedSymbol sym(v, hash, currCount);
 
-        buffer.clear();
-
         return sym;
     }
 
   private:
-    uint32_t readUint32LE() {
-        // FIXME: what if buffer not empty?
-        readBytes(4);
+    std::string readBytes(size_t n) {
+        std::string buffer(n, '\0');
+
+        size_t actuallyRead = fread(buffer.data(), 1, n, f);
+        if (actuallyRead != n) throw herr("premature end of riblet stream");
+
+        return buffer;
+    }
+
+    std::optional<uint32_t> readUint32LE() {
+        std::string buffer(4, '\0');
+        size_t actuallyRead = fread(buffer.data(), 1, 4, f);
+        if (actuallyRead == 0) return {};
+        else if (actuallyRead != 4) throw herr("premature end of riblet stream");
+
         auto v = std::string_view(buffer);
         size_t n = getUint32LE(v);
-        buffer.clear();
         return n;
     }
 };

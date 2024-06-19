@@ -34,7 +34,6 @@ void cmd_build(const std::vector<std::string> &subArgs) {
     }
 
 
-
     RIBLT r;
 
     std::string line;
@@ -42,15 +41,17 @@ void cmd_build(const std::vector<std::string> &subArgs) {
     while (*input) {
         std::getline(*input, line);
         if (line.size() == 0) continue;
-        LW << line;
         r.add(riblet::CodedSymbol(line));
     }
 
-    r.expand(1000);
+    r.expand(15);
 
 
-    std::ifstream output(outputSink.c_str(), std::ios_base::out | std::ios_base::binary );
+    riblet::FileWriter output("-");
+
+    output.writeHeader();
 
     for (size_t i = 0; i < r.codedSymbols.size(); i++) {
+        output.writeSymbol(r.codedSymbols[i]);
     }
 }
