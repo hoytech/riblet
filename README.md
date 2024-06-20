@@ -20,7 +20,7 @@
 
 
 
-TODO
+TODO HIGH
 
 docs
 
@@ -28,13 +28,10 @@ tests
 
 optional dup checking during build
 
+sum hashes instead of xor?
+
 compression
   built-in, or piped to zstd/gzip?
-
-build output, restricted to symbols/output size
-
-verbose mode
-  lists how many symbols/bytes needed
 
 header fields
   build timestamp
@@ -43,11 +40,15 @@ header fields
   input size
   input hash
   num output symbols
+  compression?
 
-better prng
 
-add hashes instead of xor?
 
-doneAdding in RIBLT: clears the codedSymbols vector. maybe useful for '-' output?
+TODO LOW
+
+doneAdding in RIBLT: clears the codedSymbols vector as they are generated. maybe useful for '-' output?
 
 -z for NUL separator instead of newline
+
+verbose mode
+  lists how many symbols/bytes needed

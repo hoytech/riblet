@@ -16,6 +16,20 @@
 namespace riblet {
 
 
+// *Really* minimal PCG32 code / (c) 2014 M.E. O'Neill / pcg-random.org
+// Licensed under Apache License 2.0 (NO WARRANTY, etc. see website)
+
+inline uint32_t pcg32_random_r(uint64_t *state) {
+    uint64_t oldstate = *state;
+    // Advance internal state
+    *state = oldstate * 6364136223846793005ULL + 1;
+    // Calculate output function (XSH RR), uses old state for max ILP
+    uint32_t xorshifted = ((oldstate >> 18u) ^ oldstate) >> 27u;
+    uint32_t rot = oldstate >> 59u;
+    return (xorshifted >> rot) | (xorshifted << ((-rot) & 31));
+}
+
+
 struct CodedSymbol {
     std::string val;
     uint8_t hash[32] = {0};
@@ -111,9 +125,10 @@ struct IndexGenerator {
     }
 
     void jump() {
-        prng *= 0xda942042e4dd58b5; // FIXME: use better PRNG
+        uint64_t rand = pcg32_random_r(&prng);
+        rand = (rand << 32) | pcg32_random_r(&prng);
 
-        curr += uint64_t(ceil((double(curr) + 1.5) * ((uint64_t(1)<<32)/std::sqrt(double(prng)+1) - 1)));
+        curr += uint64_t(ceil((double(curr) + 1.5) * ((uint64_t(1)<<32)/std::sqrt(double(rand)+1) - 1)));
     }
 };
 
