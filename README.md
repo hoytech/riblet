@@ -4,7 +4,7 @@
     riblet build file.csv -
       -> infinite stream to stdout
 
-    riblet diff file.csv <(curl https://example.com/file.csv.riblet)
+    riblet diff [--symmetric] file.csv <(curl https://example.com/file.csv.riblet)
 
     riblet sync [--add-only] [--del-only] file.csv <(curl https://example.com/file.csv.riblet)
 
@@ -26,8 +26,6 @@ docs
 
 tests
 
-optional dup checking during build
-
 sum hashes instead of xor?
 
 compression
@@ -45,6 +43,8 @@ header fields
 
 
 TODO LOW
+
+optional dup checking during build
 
 doneAdding in RIBLT: clears the codedSymbols vector as they are generated. maybe useful for '-' output?
 

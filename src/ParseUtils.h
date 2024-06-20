@@ -49,6 +49,11 @@ inline uint64_t decodeVarInt(std::string_view &encoded) {
     return res;
 }
 
+inline uint64_t decodeVarInt(const std::string &str) {
+    auto sv = std::string_view(str);
+    return decodeVarInt(sv);
+}
+
 inline std::string encodeVarInt(uint64_t n) {
     if (n == 0) return std::string(1, '\0');
 

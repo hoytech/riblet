@@ -8,7 +8,7 @@
 static const char USAGE[] =
 R"(
     Usage:
-      dump <input>
+      dump [--header-only] [--symbols-only] <input>
 )";
 
 
@@ -20,7 +20,29 @@ void cmd_dump(const std::vector<std::string> &subArgs) {
 
     riblet::FileReader input(inputSource);
 
-    input.readHeader();
+
+    auto headerElems = input.readHeader();
+
+    if (!args["--symbols-only"].asBool()) {
+        std::cout << "RIBLT Header" << "\n";
+        for (const auto &e : headerElems) {
+            if (e.tag == riblet::HEADER_TAG__BUILD_TIMESTAMP) {
+                std::cout << "  Build Timestamp = " << decodeVarInt(e.value) << "\n";
+            } else if (e.tag == riblet::HEADER_TAG__INPUT_FILENAME) {
+                std::cout << "  Input Filename = \"" << e.value << "\"\n";
+            } else if (e.tag == riblet::HEADER_TAG__INPUT_RECORDS) {
+                std::cout << "  Input Records = " << decodeVarInt(e.value) << "\n";
+            } else if (e.tag == riblet::HEADER_TAG__OUTPUT_SYMBOLS) {
+                std::cout << "  Output Symbols = " << decodeVarInt(e.value) << "\n";
+            } else {
+                std::cout << "  Unknown tag(" << e.tag << ") = 0x" << to_hex(e.value) << "\n";
+            }
+        }
+
+        std::cout << "-----------------------\n";
+    }
+
+    if (args["--header-only"].asBool()) return;
 
     uint64_t i = 0;
 
@@ -29,10 +51,10 @@ void cmd_dump(const std::vector<std::string> &subArgs) {
         if (!symOptional) break;
         auto &s = *symOptional;
 
-        LW << "CS " << i;
-        LW << "  val = '" << to_hex(s.val) << "'";
-        LW << "  hash = '" << to_hex(s.getHashSV()) << "'";
-        LW << "  count = " << s.count;
+        std::cout << "Symbol " << i << "\n";
+        std::cout << "  val = '" << to_hex(s.val) << "'" << "\n";
+        std::cout << "  hash = '" << to_hex(s.getHashSV()) << "'" << "\n";
+        std::cout << "  count = " << s.count << "\n";
 
         i++;
     }

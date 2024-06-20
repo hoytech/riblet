@@ -33,7 +33,21 @@ symbolLen == 0 means zero symbol
 namespace riblet {
 
 
+const uint64_t HEADER_TAG__BUILD_TIMESTAMP = 1;
+const uint64_t HEADER_TAG__INPUT_FILENAME = 2;
+const uint64_t HEADER_TAG__INPUT_RECORDS = 3;
+const uint64_t HEADER_TAG__INPUT_BYTES = 4;
+const uint64_t HEADER_TAG__INPUT_HASH = 5;
+const uint64_t HEADER_TAG__OUTPUT_SYMBOLS = 6;
 
+const uint64_t HEADER_TAG__COMPRESSED_ZSTD = 100;
+
+
+
+struct HeaderElem {
+    uint64_t tag;
+    std::string value;
+};
 
 
 struct FileWriter {
@@ -58,8 +72,20 @@ struct FileWriter {
         }
     }
 
-    void writeHeader() {
-        fwrite("RIBLT0\0\0\0\0", 1, 10, f);
+    void writeHeader(const std::vector<HeaderElem> &elems = {}) {
+        std::string headerPayload;
+
+        for (const auto &e : elems) {
+            headerPayload += encodeVarInt(e.tag);
+            headerPayload += encodeVarInt(e.value.size());
+            headerPayload += e.value;
+        }
+
+        std::string header = "RIBLT0";
+        header += encodeUint32LE(headerPayload.size());
+        header += headerPayload;
+
+        fwrite(header.data(), 1, header.size(), f);
     }
 
     void writeSymbol(const CodedSymbol &sym) {
@@ -109,9 +135,25 @@ struct FileReader {
         }
     }
 
-    void readHeader() {
-        std::string s = readBytes(10);
-        if (!s.starts_with("RIBLT0")) throw herr("not a RIBLT file");
+    std::vector<HeaderElem> readHeader() {
+        if (readBytes(6) != "RIBLT0") throw herr("not a RIBLT file");
+
+        auto headerSizeOpt = readUint32LE();
+        if (!headerSizeOpt) throw herr("unable to read header size");
+        std::string headerStr = readBytes(*headerSizeOpt);
+        auto h = std::string_view(headerStr);
+
+        std::vector<HeaderElem> output;
+
+        while (h.size()) {
+            uint64_t tag = decodeVarInt(h);
+            uint64_t length = decodeVarInt(h);
+            std::string value = getBytes(h, length);
+
+            output.emplace_back(tag, std::move(value));
+        }
+
+        return output;
     }
 
     std::optional<CodedSymbol> readSymbol() {
@@ -121,7 +163,6 @@ struct FileReader {
         auto symSize = (size_t) *symSizeOptional;
 
         if (symSize == 0) return CodedSymbol();
-        if (symSize > maxReadSize) throw herr("riblet record read too big: ", symSize);
 
         auto buffer = readBytes(symSize);
         auto v = std::string_view(buffer);
@@ -154,6 +195,7 @@ struct FileReader {
 
         auto v = std::string_view(buffer);
         size_t n = getUint32LE(v);
+        if (n > maxReadSize) throw herr("riblet record read too big: ", n);
         return n;
     }
 };

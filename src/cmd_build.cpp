@@ -5,8 +5,9 @@
 #include <docopt.h>
 #include "golpe.h"
 
-#include "RIBLT.h"
+#include "ParseUtils.h"
 #include "FileFormat.h"
+#include "RIBLT.h"
 
 
 static const char USAGE[] =
@@ -21,7 +22,7 @@ void cmd_build(const std::vector<std::string> &subArgs) {
     std::map<std::string, docopt::value> args = docopt::docopt(USAGE, subArgs, true, "");
 
     std::string inputFile, outputFile;
-    uint64_t numRecs = MAX_U64;
+    uint64_t numSyms = MAX_U64;
 
     if (!args["<input>"]) throw herr("must provide <input> argument (can be '-' for stdin)");
     inputFile = args["<input>"].asString();
@@ -33,9 +34,9 @@ void cmd_build(const std::vector<std::string> &subArgs) {
         outputFile = inputFile + ".riblet";
     }
 
-    if (args["--num"]) numRecs = args["--num"].asLong();
+    if (args["--num"]) numSyms = args["--num"].asLong();
 
-    if (outputFile != "-" && numRecs == MAX_U64) throw herr("can only use infinite symbol generation when the output is '-' (stdout)");
+    if (outputFile != "-" && numSyms == MAX_U64) throw herr("can only use infinite symbol generation when the output is '-' (stdout)");
 
 
 
@@ -50,26 +51,40 @@ void cmd_build(const std::vector<std::string> &subArgs) {
 
     RIBLT r;
 
-    if (numRecs != MAX_U64) {
-        r.expand(numRecs);
+    if (numSyms != MAX_U64) {
+        r.expand(numSyms);
         r.setDoneExpanding();
     }
 
     std::string line;
+    uint64_t numRecs = 0;
 
     while (*inputStream) {
         std::getline(*inputStream, line);
         if (line.size() == 0) continue;
+        numRecs++;
         r.add(riblet::CodedSymbol(line));
     }
 
 
     riblet::FileWriter output(outputFile, args["--rebuild"].asBool());
 
-    output.writeHeader();
+    {
+        std::vector<riblet::HeaderElem> headerElems = {
+            { riblet::HEADER_TAG__BUILD_TIMESTAMP, encodeVarInt(::time(nullptr)) },
+            { riblet::HEADER_TAG__INPUT_FILENAME, inputFile },
+            { riblet::HEADER_TAG__INPUT_RECORDS, encodeVarInt(numRecs) },
+        };
+
+        if (numSyms != MAX_U64) {
+            headerElems.push_back({ riblet::HEADER_TAG__OUTPUT_SYMBOLS, encodeVarInt(numSyms) });
+        }
+
+        output.writeHeader(headerElems);
+    }
 
 
-    if (numRecs == MAX_U64) {
+    if (numSyms == MAX_U64) {
         size_t curr = 0;
 
         while (1) {

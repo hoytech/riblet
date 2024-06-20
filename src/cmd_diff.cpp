@@ -10,7 +10,7 @@
 static const char USAGE[] =
 R"(
     Usage:
-      diff <inputA> <inputB>
+      diff [--symmetric] <inputA> <inputB>
 )";
 
 
@@ -20,6 +20,7 @@ void cmd_diff(const std::vector<std::string> &subArgs) {
 
     std::string inputSourceA = args["<inputA>"].asString();
     std::string inputSourceB = args["<inputB>"].asString();
+    bool symmetric = args["--symmetric"].asBool();
 
     riblet::FileReader inputA(inputSourceA);
     riblet::FileReader inputB(inputSourceB);
@@ -42,8 +43,11 @@ void cmd_diff(const std::vector<std::string> &subArgs) {
         symA.sub(symB);
         r.push(symA);
 
-        r.peel([](const auto &s){
-            std::cout << (s.count == 1 ? '-' : '+') << s.getVal() << "\n";
+        r.peel([&](const auto &s){
+            const char *prefix = symmetric ? "" :
+                                 s.count == 1 ? "-" : "+";
+
+            std::cout << prefix << s.getVal() << "\n";
         });
 
         if (r.isBalanced()) break;
