@@ -45,7 +45,7 @@ struct FileWriter {
         if (filename == "-") {
             f = ::stdout;
         } else {
-            if (!overwrite && !access(filename.c_str(), X_OK)) throw herr("file '", filename, "' already exists");
+            if (!overwrite && !access(filename.c_str(), F_OK)) throw herr("file '", filename, "' already exists: use --rebuild to overwrite");
             f = ::fopen(filename.c_str(), "wb");
             if (f == nullptr) throw herr("unable to open file '", filename, "' for writing: ", strerror(errno));
         }

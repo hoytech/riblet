@@ -197,9 +197,9 @@ struct RIBLT {
         queue.clear();
     }
 
-    void add(const CodedSymbol &sym) {
+    void add(const CodedSymbol &sym, std::function<void(size_t)> onSym = [](...){}) {
         IndexGenerator gen(sym);
-        applySym(sym, gen);
+        applySym(sym, gen, onSym);
         if (!doneExpanding) queue.enqueue(sym, gen);
     }
 
@@ -220,10 +220,8 @@ struct RIBLT {
             onSym(codedSymbols[index]);
 
             auto sym = codedSymbols[index];
-            IndexGenerator gen(sym);
             sym.negate();
-            LW << "DECODEABLE " << index;
-            applySym(sym, gen, [&](size_t newIndex){
+            add(sym, [&](size_t newIndex){
                 if (codedSymbols[newIndex].isPure()) decodeable.push_back(newIndex);
             });
         }
@@ -235,10 +233,8 @@ struct RIBLT {
 
   private:
     void applySym(const CodedSymbol &sym, IndexGenerator &gen, std::function<void(size_t)> cb = [](size_t){}) {
-        LW << "APPLYSIM";
         while (gen.curr < codedSymbols.size()) {
             codedSymbols[gen.curr].add(sym);
-            LW << "Killing " << gen.curr << " / " << sym.getVal() << " / " << sym.count;
             cb(gen.curr);
             gen.jump();
         }
