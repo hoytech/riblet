@@ -6,8 +6,6 @@
 
     riblet diff [--symmetric] file.csv <(curl https://example.com/file.csv.riblet)
 
-    riblet sync [--add-only] [--del-only] file.csv <(curl https://example.com/file.csv.riblet)
-
     riblet dump file.csv
 
 
@@ -20,6 +18,8 @@
 
 
 
+
+
 TODO HIGH
 
 docs
@@ -28,25 +28,20 @@ tests
 
 sum hashes instead of xor?
 
-compression
-  built-in, or piped to zstd/gzip?
-
-header fields
-  build timestamp
-  filename
-  num input records
-  input size
-  input hash
-  num output symbols
-  compression?
 
 
 
 TODO LOW
 
+header fields
+  input size
+  input hash
+
+zstd compression
+
 optional dup checking during build
 
-doneAdding in RIBLT: clears the codedSymbols vector as they are generated. maybe useful for '-' output?
+doneAdding param in RIBLT: clears the codedSymbols vector as they are generated. maybe useful for '-' output?
 
 -z for NUL separator instead of newline
 
