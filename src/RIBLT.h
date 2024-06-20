@@ -29,10 +29,75 @@ inline uint32_t pcg32_random_r(uint64_t *state) {
     return (xorshifted >> rot) | (xorshifted << ((-rot) & 31));
 }
 
+struct Hash {
+    uint8_t buf[32] = {0};
+
+    void add(const Hash &other) {
+        const uint8_t *otherBuf = &other.buf[0];
+
+        uint64_t currCarry = 0, nextCarry = 0;
+        uint64_t *p = reinterpret_cast<uint64_t*>(buf);
+        const uint64_t *po = reinterpret_cast<const uint64_t*>(otherBuf);
+
+        auto byteswap = [](uint64_t &n) {
+            uint8_t *first = reinterpret_cast<uint8_t*>(&n);
+            uint8_t *last = first + 8;
+            std::reverse(first, last);
+        };
+
+        for (size_t i = 0; i < 4; i++) {
+            uint64_t orig = p[i];
+            uint64_t otherV = po[i];
+
+            if constexpr (std::endian::native == std::endian::big) {
+                byteswap(orig);
+                byteswap(otherV);
+            } else {
+                static_assert(std::endian::native == std::endian::little);
+            }
+
+            uint64_t next = orig;
+
+            next += currCarry;
+            if (next < orig) nextCarry = 1;
+
+            next += otherV;
+            if (next < otherV) nextCarry = 1;
+
+            if constexpr (std::endian::native == std::endian::big) {
+                byteswap(next);
+            }
+
+            p[i] = next;
+            currCarry = nextCarry;
+            nextCarry = 0;
+        }
+    }
+
+    void negate() {
+        for (size_t i = 0; i < sizeof(buf); i++) {
+            buf[i] = ~buf[i];
+        }
+
+        Hash one;
+        one.buf[0] = 1;
+        add(one);
+    }
+
+    uint64_t getSeed() const {
+        // FIXME: byteswap if big-endian
+        return *((uint64_t*)&buf[0]);
+    }
+
+    std::string_view sv() const {
+        return std::string_view(reinterpret_cast<const char*>(buf), sizeof(buf));
+    }
+};
+
 
 struct CodedSymbol {
     std::string val;
-    uint8_t hash[32] = {0};
+    Hash hash;
     int64_t count = 0;
 
     CodedSymbol() {
@@ -42,7 +107,7 @@ struct CodedSymbol {
         val += to_sv<uint32_t>((uint32_t) valRaw.size()); // FIXME: bounds check this size, endianness
         val += valRaw;
 
-        SHA256(reinterpret_cast<const unsigned char*>(valRaw.data()), valRaw.size(), hash);
+        SHA256(reinterpret_cast<const unsigned char*>(valRaw.data()), valRaw.size(), hash.buf);
 
         count = count_;
     }
@@ -51,30 +116,34 @@ struct CodedSymbol {
         if (hash_.size() != 32) throw herr("invalid hash size");
 
         val += val_;
-        std::memcpy(hash, hash_.data(), 32);
+        std::memcpy(hash.buf, hash_.data(), 32);
 
         count = count_;
     }
 
     void add(const CodedSymbol &other) {
-        update(other, other.count);
+        update(other, other.count, false);
     }
 
     void sub(const CodedSymbol &other) {
-        update(other, -other.count);
+        update(other, -other.count, true);
     }
 
-    void update(const CodedSymbol &other, int64_t inc) {
+    void update(const CodedSymbol &other, int64_t inc, bool negate) {
         if (other.val.size() > val.size()) val.resize(other.val.size(), '\0');
         for (size_t i = 0; i < other.val.size(); i++) val[i] ^= other.val[i];
 
-        for (size_t i = 0; i < 32; i++) hash[i] ^= other.hash[i];
+        Hash otherHash = other.hash;
+        if (negate) otherHash.negate();
+
+        hash.add(otherHash);
 
         count += inc;
     }
 
     void negate() {
         count *= -1;
+        hash.negate();
     }
 
     bool isPure() {
@@ -88,7 +157,7 @@ struct CodedSymbol {
 
             uint8_t tempHash[32];
             SHA256(reinterpret_cast<const unsigned char*>(v.data()), size, tempHash);
-            return std::memcmp(hash, tempHash, 32) == 0;
+            return std::memcmp(hash.buf, tempHash, 32) == 0;
         }
 
         return false;
@@ -96,7 +165,7 @@ struct CodedSymbol {
 
     bool isZero() const {
         uint8_t empty[32] = {0};
-        return count == 0 && memcmp(hash, empty, 32) == 0;
+        return count == 0 && memcmp(hash.buf, empty, 32) == 0;
     }
 
     std::string getVal() const {
@@ -109,10 +178,6 @@ struct CodedSymbol {
         if (size > v.size()) throw herr("val not decodeable (not pure?)");
         return std::string(v.substr(0, size));
     }
-
-    std::string_view getHashSV() const {
-        return std::string_view(reinterpret_cast<const char*>(hash), 32);
-    }
 };
 
 
@@ -121,7 +186,7 @@ struct IndexGenerator {
     uint64_t prng;
 
     IndexGenerator(const CodedSymbol &sym) {
-        prng = *((uint64_t*)sym.hash); // FIXME: byteswap if big-endian, use from_sv
+        prng = sym.hash.getSeed();
     }
 
     void jump() {

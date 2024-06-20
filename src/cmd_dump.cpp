@@ -53,7 +53,7 @@ void cmd_dump(const std::vector<std::string> &subArgs) {
 
         std::cout << "Symbol " << i << "\n";
         std::cout << "  val = '" << to_hex(s.val) << "'" << "\n";
-        std::cout << "  hash = '" << to_hex(s.getHashSV()) << "'" << "\n";
+        std::cout << "  hash = '" << to_hex(s.hash.sv()) << "'" << "\n";
         std::cout << "  count = " << s.count << "\n";
 
         i++;

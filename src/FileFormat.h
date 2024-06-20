@@ -102,7 +102,7 @@ struct FileWriter {
         std::string encodedSym;
 
         encodedSym += encodeVarIntZ(countDelta);
-        encodedSym += sym.getHashSV();
+        encodedSym += sym.hash.sv();
         encodedSym += sym.val;
 
         std::string sizeOutput = encodeUint32LE(encodedSym.size());
