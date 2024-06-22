@@ -22,7 +22,7 @@ Riblet is based on an algorithm called Rateless Invertible Bloom Lookup Tables (
 * [Delta Encoding](#delta-encoding)
 * [Performance Notes](#performance-notes)
 * [Security](#security)
-* [Application: All The Domains](#application-all-the-domains)
+* [Application: All Of Domains](#application-all-of-domains)
     * [Experiment](#experiment)
     * [Conclusion](#conclusion)
 * [Author](#author)
@@ -201,7 +201,7 @@ Even if adversarial inputs do become problematic, RIBLT can likely be adapted to
 
 
 
-## Application: All The Domains
+## Application: All Of Domains
 
 In order to gather some concrete data about riblet, we performed an experiment with a non-trivial sized data-set: The set of all registered domain names.
 
