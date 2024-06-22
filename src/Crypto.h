@@ -3,6 +3,8 @@
 #include <cstring>
 #include <string_view>
 
+#include <openssl/sha.h>
+
 
 namespace riblet {
 

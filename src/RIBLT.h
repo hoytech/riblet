@@ -6,8 +6,6 @@
 #include <optional>
 #include <functional>
 
-#include <openssl/sha.h>
-
 #include "golpe.h"
 
 #include "Crypto.h"
