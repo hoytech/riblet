@@ -165,7 +165,7 @@ In mathematical terminology, this is called the [symmetric difference](https://e
 
     sort file.csv file.diff | uniq -u > file2.csv
 
-The `-u` flag tells `uniq` to only output non-duplicated lines. If a line appears in both the original and the diff, it must be a deletion line, in which case `uniq -u` will *not* print it. On the other hand, if it only appears in one of the files, it must've been from either the source file or an addition line from the diff, so it *will* be printed.
+The `-u` flag tells `uniq` to only output unique (non-duplicated) lines. If a line appears in both the original and the diff, it must be a deletion line, in which case `uniq -u` will *not* print it. On the other hand, if it only appears in one of the files, it must've been from either the source file or an addition line from the diff, so it *will* be printed.
 
 `sort` uses an external sort algorithm, meaning it is possible to sort files too large to fit in memory (useful tip: check out the `-T` and `--compress-program` flags).
 
@@ -189,7 +189,7 @@ With riblet, each user can decide how many coded symbols to maintain/publish, an
 
 * When computing the coded symbols, the size of each symbol's value is the maximum of the input records used to build it. Since the first element is the combination of *all* records, it is the size of the largest element in the set. As the coded symbols are generated, since they incorporate fewer records on average, their size will decrease (again, on average). For this reason, riblet works best with sets of similarly-sized records, or at least ones without too many large outliers.
 * Currently `riblet build` is CPU-bound, and runs on a single thread. This can easily be improved, thanks to the linearity of the RIBLT algorithm. Each thread could compute its own set of coded symbols over a sub-set of the input, and then have them combined into the final stream at output-time. Parallelising `riblet diff` is more difficult, since the "peel" algorithm isn't embarrassingly parallel in the same way.
-* Although originally designed for it, at this time it is not clear to me if the RIBLT algorithm will work well for the online-server use-case. As a randomised data-structure, RIBLT will require considerable random access IO to maintain and/or generate, which may be in short supply on a busy server. RIBLT also cannot amortise any work when adjacent records are missing/present (an extremely common use-case), and it degrades poorly when tasked with common base-cases such as where one side has all/none/few of the records. In general, we think if the records to be synced have any temporal/spatial locality (for example, if they contain a timestamp), [Range-Based Set Reconciliation](https://logperiodic.com/rbsr.html) will be superior. More research/experimentation is needed to prove/disprove this.
+* Although originally designed for it, at this time it is not clear to us if the RIBLT algorithm will work well for the online-server use-case. As a randomised data-structure, RIBLT will require considerable random access IO to maintain and/or generate, which may be in short supply on a busy server. RIBLT also cannot amortise any work when adjacent records are missing/present (an extremely common use-case), and it degrades poorly when tasked with common base-cases such as where one side has all/none/few of the records. In general, we think if the records to be synced have any temporal/spatial locality (for example, if they contain a timestamp), [Range-Based Set Reconciliation](https://logperiodic.com/rbsr.html) will be superior. More research/experimentation is needed to prove/disprove this.
 
 
 ## Security
@@ -207,7 +207,7 @@ In order to gather some concrete data about riblet, we performed an experiment w
 
 ### Experiment
 
-We start with two files, `domains1.txt` and `domains2.txt`, which contain the data-sets on subsequent days. Each file contains ~266 million records and consumes about 4.6 GB of disk-space. They are sorted and look something like this:
+We start with two files, `domains1.txt` and `domains2.txt`, which contain the data-sets on subsequent days. Each file contains ~266 million records and consumes ~4.6 GB of disk-space. They are sorted and look something like this:
 
     000000000000000000000000000000000000000000000000000000000000000.com
     000000000000000000000000000000000000000000000000000000000000000.co.uk
@@ -265,7 +265,7 @@ In terms of file sizes, each `.riblet` file with 1 million coded symbols takes a
 
 ### Conclusion
 
-It's difficult to say whether riblet is a good fit for this application. It performed reliably and predictably, but the `.riblet` file for a day's difference is about 6x the size of the symmetric difference. This relative overhead will increase somewhat with compression, since sorted lists of domain names compress better than `.riblet` files (which are randomly ordered and contain lots of hash function outputs).
+It's difficult to say whether riblet is a good fit for this application. It performed reliably and predictably, but the `.riblet` data needed for a day's difference is about 6x the size of the symmetric difference. This relative overhead will increase somewhat with compression, since sorted lists of domain names compress better than `.riblet` files (which are randomly ordered and contain lots of hash function outputs).
 
 There are a few possible ways to reduce the overhead of `.riblet` files and we could probably cut it down about a third by truncating hashes and better packing some of the symbol meta-data, but much of this overhead is an unavoidable property of the RIBLT algorithm. Generating the `.riblet` files takes considerable time, but there is a lot of room to optimise this: parallelisation, faster hash functions, etc.
 
