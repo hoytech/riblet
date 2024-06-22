@@ -1,6 +1,6 @@
 # riblet
 
-`riblet` is a command-line tool for efficiently diffing and syncing large [sets](https://en.wikipedia.org/wiki/Set_(mathematics)). Sets are stored in unordered, newline-delimited files, and are assumed to not contain duplicates.
+`riblet` is a command-line tool for efficiently diffing and syncing large [sets](https://en.wikipedia.org/wiki/Set_(mathematics)). Sets are stored in unordered, newline-delimited files, which are assumed to not contain duplicates.
 
 The `riblet build` command performs a "riblet transform", which converts a set into a sequence of coded symbols. These symbols can be used to rapidly identify if two sets differ and, if so, what the differences actually are. Best of all, the symbols form an incremental error-correcting code, which means that you only need to download or process a number of them proportional to the amount of differences between the two sets: The sizes of the sets themselves do not matter.
 
