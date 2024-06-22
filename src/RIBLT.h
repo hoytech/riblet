@@ -172,7 +172,7 @@ struct RIBLT {
 
         while (queue.nextCodedIndex() < codedSymbols.size()) {
             auto &top = queue.top();
-            applySym(top.sym, top.gen);
+            diffuseSymbol(top.sym, top.gen);
             queue.bubbleUp();
         }
     }
@@ -189,7 +189,7 @@ struct RIBLT {
 
     void add(CodedSymbol &&sym, const std::function<void(size_t)> &onSym = [](...){}) {
         IndexGenerator gen(sym);
-        applySym(sym, gen, onSym);
+        diffuseSymbol(sym, gen, onSym);
         if (!doneExpanding) queue.enqueue(std::move(sym), gen);
     }
 
@@ -222,7 +222,7 @@ struct RIBLT {
     }
 
   private:
-    void applySym(const CodedSymbol &sym, IndexGenerator &gen, const std::function<void(size_t)> &cb = [](size_t){}) {
+    void diffuseSymbol(const CodedSymbol &sym, IndexGenerator &gen, const std::function<void(size_t)> &cb = [](size_t){}) {
         while (gen.curr < codedSymbols.size()) {
             codedSymbols[gen.curr].add(sym);
             cb(gen.curr);
