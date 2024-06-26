@@ -28,3 +28,7 @@ gracefully handle dups somehow during diff instead of infinite looping, etc
 
 verbose mode
   lists how many symbols/bytes consumed
+
+error check fwrite() calls in FileFormat.h
+
+atomic existence checking for --rebuild: open(O_EXCL), fdopen()
