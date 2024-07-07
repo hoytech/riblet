@@ -31,9 +31,13 @@ Riblet is based on an algorithm called Rateless Invertible Bloom Lookup Tables (
 
 ## Compilation
 
-Riblet requires a C++20 compiler and OpenSSL. For example, on Debian/Ubuntu-based systems, run:
+Riblet requires a C++20 compiler and OpenSSL:
 
+    ## Debian/Ubuntu
     sudo apt install -y build-essential libssl-dev
+
+    ## Redhat
+    sudo yum install make g++ openssl-dev
 
 Then in the repo directory, build the `riblet` binary with these commands:
 
