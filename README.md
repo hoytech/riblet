@@ -37,7 +37,7 @@ Riblet requires a C++20 compiler and OpenSSL:
     sudo apt install -y build-essential libssl-dev
 
     ## Redhat
-    sudo yum install make g++ openssl-dev
+    sudo yum install make g++ openssl-devel
 
 Then in the repo directory, build the `riblet` binary with these commands:
 
